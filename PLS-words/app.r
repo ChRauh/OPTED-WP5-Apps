@@ -19,7 +19,18 @@ parl.select <- data.frame(parliament = c("UK-HouseOfCommons", "DE-Bundestag"),
 # Define UI
 ui <- fluidPage(theme = shinytheme("cerulean"),
                 navbarPage(
-                  "Words in Parliament",
+                  title = "Words in Parliament",
+                  # title = div(
+                  #   "Words in Parliament",
+                  #   div(
+                  #     id = "img-id",
+                  #     img(src = "opted_logo.png",
+                  #         style = "display: block;
+                  #                   width: 100px;
+                  #                   height: 100px;
+                  #                   margin-left: auto;")
+                  #   )
+                  # ),
                   id = "tabs",
                   tabPanel("Overview & Input",
                            sidebarLayout(position = "right",
@@ -64,8 +75,40 @@ ui <- fluidPage(theme = shinytheme("cerulean"),
                            ) # mainPanel
                            ) # sidebarLayout
 
-                  ) # Navbar 1, tabPanel
-                  
+                  ), # Navbar 1, tabPanel
+                  tabPanel("Time", 
+                           sidebarLayout(position = "left",
+                                         sidebarPanel(width = 3, # Out of 12
+                                                      helpText("This plot illustrates the prominence of your keywords in the respective parliament over time."),
+                                                      helpText("It shows the monthly share of speeches in which at least one of the key words was used."),
+                                                      helpText("Hoover over the plot to select your preferred time series, to zoom in or out, and to save the resulting picture."),
+                                                      helpText("You can also download the underlying monthly time series, but note the usage and citation requirements on the main page."),
+                                                      downloadButton("downloadTime", "Download time series")),
+                                         mainPanel(plotlyOutput("timeplot"))
+                           )
+                  ),
+                  tabPanel("Parties",
+                           sidebarLayout(position = "left",
+                                         sidebarPanel(width = 3, # Out of 12
+                                                      helpText("This plot illustrates the prominence of your keywords across the parties in the respective parliament."),
+                                                      helpText("It shows the share of partisan speeches in which at least one of the key words was used (including the 95% confidence interval around this average value)."),
+                                                      helpText("Hoover over the plot to customize it or to save the resulting picture."),
+                                                      helpText("You can also download the party shares below, but note the usage and citation requirements on the main page."),
+                                                      downloadButton("downloadParty", "Download party shares")),
+                                         mainPanel(plotlyOutput("partyplot"))
+                           )
+                  ),
+                  tabPanel("Speakers",
+                           sidebarLayout(position = "left",
+                                         sidebarPanel(width = 3, # Out of 12
+                                                      helpText("This plot illustrates the prominence of your keywords across the individual in the respective parliament."),
+                                                      helpText("It shows the share of of keywords of all words a speaker has uttered in parliament (speaking time varies a lot!), listing only the top 25 speakers along that measure."),
+                                                      helpText("Hoover over the plot to customize it or to save the resulting picture."),
+                                                      helpText("You can also download the values for all speakers below, but note the usage and citation requirements on the main page."),
+                                                      downloadButton("downloadSpeaker", "Download speaker shares")),
+                                         mainPanel(plotlyOutput("speakerplot"))
+                           )
+                  )
                 ) # navbarPage
 ) # fluidPage
 
@@ -73,51 +116,6 @@ ui <- fluidPage(theme = shinytheme("cerulean"),
 
 # Define server logic to plot various variables against mpg ----
 server <- function(input, output) {
-  
-  # Let results tabs only appear upon first submit button
-  observeEvent(input$submit, {
-    appendTab(inputId = "tabs",
-              tabPanel("Time", 
-                       sidebarLayout(position = "left",
-                                     sidebarPanel(width = 3, # Out of 12
-                                                  helpText("This plot illustrates the prominence of your keywords in the respective parliament over time."),
-                                                  helpText("It shows the monthly share of speeches in which at least one of the key words was used."),
-                                                  helpText("Hoover over the plot to select your preferred time series, to zoom in or out, and to save the resulting picture."),
-                                                  helpText("You can also download the underlying monthly time series, but note the usage and citation requirements on the main page."),
-                                                  downloadButton("downloadTime", "Download time series")),
-                                     mainPanel(plotlyOutput("timeplot"))
-                       )
-              )
-    )
-    appendTab(inputId = "tabs",
-              tabPanel("Parties",
-                       sidebarLayout(position = "left",
-                                     sidebarPanel(width = 3, # Out of 12
-                                                  helpText("This plot illustrates the prominence of your keywords across the parties in the respective parliament."),
-                                                  helpText("It shows the share of partisan speeches in which at least one of the key words was used (including the 95% confidence interval around this average value)."),
-                                                  helpText("Hoover over the plot to customize it or to save the resulting picture."),
-                                                  helpText("You can also download the party shares below, but note the usage and citation requirements on the main page."),
-                                                  downloadButton("downloadParty", "Download party shares")),
-                                     mainPanel(plotlyOutput("partyplot"))
-                       )
-              )
-    )
-    appendTab(inputId = "tabs",
-              tabPanel("Speakers",
-                       sidebarLayout(position = "left",
-                                     sidebarPanel(width = 3, # Out of 12
-                                                  helpText("This plot illustrates the prominence of your keywords across the individual in the respective parliament."),
-                                                  helpText("It shows the share of of keywords of all words a speaker has uttered in parliament (speaking time varies a lot!), listing only the top 25 speakers along that measure."),
-                                                  helpText("Hoover over the plot to customize it or to save the resulting picture."),
-                                                  helpText("You can also download the values for all speakers below, but note the usage and citation requirements on the main page."),
-                                                  downloadButton("downloadSpeaker", "Download speaker shares")),
-                                     mainPanel(plotlyOutput("speakerplot"))
-                       )
-              )
-    )
-    # removeTab(inputId = "tabs", target = "Test")
-  })
-  
   
   # Update user parliament choice upon submit button
   user.parliament <- eventReactive(input$submit, {
@@ -133,14 +131,14 @@ server <- function(input, output) {
   })
   
   # Quanteda dictionary of key words
-  user.dict <- reactive({
+  user.dict <- eventReactive(input$submit, {
     list(hits = user.words()) %>% 
     dictionary()
     })
   
   # Load tokens object of selected parliament, and select key words
   # The time killer
-  out.tok <- reactive({
+  out.tok <- eventReactive(input$submit, {
     
     showModal(modalDialog("Collecting data and searching your key words! Just a few seconds ...", footer=NULL))
     
@@ -158,7 +156,7 @@ server <- function(input, output) {
     })
    
   # Get data frame
-  out.data <- reactive({
+  out.data <- eventReactive(input$submit, {
     
     showModal(modalDialog("Count your key words! Almost there ...", footer=NULL))
     
