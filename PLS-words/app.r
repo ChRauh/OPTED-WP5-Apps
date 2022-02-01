@@ -6,6 +6,8 @@ library(quanteda) # 3.2.0
 library(plotly) # 4.10.0
 library(gmodels)
 
+# OPTED blue
+# #0063a6
 
 
 # Object selection ####
@@ -17,7 +19,11 @@ parl.select <- data.frame(parliament = c("UK-HouseOfCommons", "DE-Bundestag"),
 
 
 # Define UI
-ui <- fluidPage(theme = shinytheme("cerulean"),
+ui <- fluidPage(
+                # theme = shinytheme("cerulean"),
+                tags$head(
+                  tags$link(rel = "stylesheet", type = "text/css", href = "cerulean.OPTED.css") # Edited cerulean scheme with OPTED branding
+                ),
                 navbarPage(
                   title = "Words in Parliament",
                   # title = div(
@@ -196,7 +202,7 @@ server <- function(input, output) {
     time.gg <- ggplot(time.data(), aes(y = value, x = month, color = series, size = series, group = series))+
       geom_line()+
       scale_x_discrete(breaks = time.breaks, labels = time.labels)+
-      scale_color_manual(values = c("grey60", "darkblue"), name = "Time series: ")+
+      scale_color_manual(values = c("grey60", "#0063a6"), name = "Time series: ")+
       scale_size_manual(values = c(.5, 1.2), name = "Time series: ")+
       labs(title = "Keywords over time",
            subtitle = paste("Parliament: ", user.parliament(), ". Keywords: ", paste(user.words(), collapse = ", "), sep = ""),
@@ -250,8 +256,8 @@ server <- function(input, output) {
   output$partyplot <- renderPlotly({
     parties.gg <- ggplot(party.data(), aes(y = party))+
       geom_vline(xintercept = mean(party.data()$share), linetype = "dashed")+
-      geom_linerange(aes(xmin = lo, xmax = hi), color = "darkblue")+
-      geom_point(aes(x=share), color = "darkblue")+
+      geom_linerange(aes(xmin = lo, xmax = hi), color = "#0063a6")+
+      geom_point(aes(x=share), color = "#0063a6")+
       labs(title = "Keywords by party of speaker",
            subtitle = paste("Parliament: ", user.parliament(), ". Keywords: ", paste(user.words(), collapse = ", "), sep = ""),
            x = "Share of parliamentary speeches\nwith at least one keyword (%)\n",
@@ -303,7 +309,7 @@ server <- function(input, output) {
   # Speaker plot
   output$speakerplot <- renderPlotly({
     speaker.gg <- ggplot(head(speaker.data(), 25), aes(y = speaker, x = share))+
-      geom_col(fill = "darkblue", width = .7)+
+      geom_col(fill = "#0063a6", width = .7)+
       geom_vline(xintercept = mean(speaker.data()$share), linetype = "solid", color = "red")+
       scale_x_continuous(expand = expansion(mult = c(0, 0.1)))+
       labs(title = "Keyword usage by individual speakers (Top 25, in relative terms)",
