@@ -9,6 +9,8 @@ library(gmodels)
 # OPTED blue
 # #0063a6
 
+# <a href=\"https://doi.org/10.7910/DVN/L4OAKN\" target=\"_blank\">Rauh and Schwalbach 2020</a>
+
 
 # Object selection ####
 # Basis to let the app select the right data based on user parliament selection
@@ -26,56 +28,39 @@ ui <- fluidPage(
                 ),
                 navbarPage(
                   title = "Words in Parliament",
-                  # title = div(
-                  #   "Words in Parliament",
-                  #   div(
-                  #     id = "img-id",
-                  #     img(src = "opted_logo.png",
-                  #         style = "display: block;
-                  #                   width: 100px;
-                  #                   height: 100px;
-                  #                   margin-left: auto;")
-                  #   )
-                  # ),
                   id = "tabs",
                   tabPanel("Overview & Input",
                            sidebarLayout(position = "right",
                            sidebarPanel(
-                             tags$h3("Your choices"),
+                             # tags$h3("Your choices"),
                              selectInput("parl", label = h4("Parliament"),
                                          choices = list("DE: Bundestag" = "DE-Bundestag", 
                                                         "UK: House Of Commons" = "UK-HouseOfCommons"), 
                                          selected = 1),
-                             helpText("Here you can choose one of the parliamentary chambers that we currently feature."),
+                             helpText("Choose one of the parliamentary chambers we currently feature."),
                              textInput("words", label = h4("Words"), "migration*, flucht*"),
-                             helpText("Enter the word(s) you want to track in parliamentary speeches here. You can combine multiple words in a comma-separated list. Use the * wildcard to match one or several characters."),
+                             helpText("The word(s) you want to track in parliamentary speeches. Combine multiple words in a comma-separated list. Use the * wildcard to match one or several characters."),
                              helpText("Once you submit your choices, we collect and analyze the data for you. Given the size of the text corpora, this may take a couple of seconds."),
-                             actionButton("submit", label = "Submit!")
+                             actionButton("submit", label = "Submit!", style = "color: #0063a6;")
                              # submitButton(text = "Submit!")
                              
                            ), # sidebarPanel
                            mainPanel(
-                             h3("Words in Parliament"),
-                             p("This application allows you to quickly analyze whether and how
-                               specific words have featured in the political debates of different national parliaments in Europe."),
-                             p("Once you have chosen the parliament and the words of interest to you on the right-hand side,
-                               we extract three sets of results for you:"),
-                             
-                             tags$ul(tags$li(HTML("Prominence of the words in parliament <b>over time</b>")),
-                                     tags$li(HTML("Prominence of the words in parliaments <b>across different parties</b>")),
-                                     tags$li(HTML("Prominence of the words in parliaments <b>across individual speakers</b>"))),
-                             p(""),
-                             p("Use the navigation on top of this page to jump to these results. The graphics can be customized and saved (just hoover over them). 
-                               You may also download the aggregated data for each set of results."),
-                             p(HTML("If you <b>use this material in your work</b>, 
-                                    please refer to this application 
-                                    and cite <a href=\"https://doi.org/10.7910/DVN/L4OAKN\" target=\"_blank\">Rauh and Schwalbach 2020</a> as the data source.")),
-                             p("Authorship, OPTED reference, funding stuff HERE."),
-                             p(""),
-                             p("And now: Have fun!"),
-                             p(""),
-                             
-                             h3("Your current selection"),
+                             h4("Words in Parliament"),
+                             p(HTML("<i style = \"color: #0063a6\">Quickly analyze how
+                               specific words have featured in political debates of different national parliaments in Europe.</i>")),
+                             p(HTML("")),
+                             p(HTML("Once you have chosen the words and the parliament of interest to you on the right-hand side,
+                               we visualize their prominence in all plenary speeches over <i>time</i>, across <i>different parties</i>, and across <i>individual speakers</i>.
+                                    <br> The menu on top of this page leads you to these results. All graphics can be customized and saved by hoovering over them. 
+                               You may also download the underlying data.")),
+                             p(HTML("Before <i>using this material in your work</i>, please consult the 'About' page above.")),
+                             p(HTML("This proto-type application has been developed in <a href=\"https://opted.eu/designing-an-infrastructure/wp5-parliamentary-government-and-legal-texts\" target=\"_blank\">Work Package 5</a> 
+                                    of the <a href=\"https://opted.eu\" target=\"_blank\">OPTED initiative</a>. 
+                                    This project has received funding from the European Union’s Horizon 2020 research & innovation programme under <a href=\"https://cordis.europa.eu/project/id/951832\" target=\"_blank\">grant agreement No 951832</a>.<br>")),
+                             p(HTML("<br>")),
+
+                             h4("Your current selection"),
                              verbatimTextOutput("summary")
                              
                            ) # mainPanel
@@ -114,6 +99,36 @@ ui <- fluidPage(
                                                       downloadButton("downloadSpeaker", "Download speaker shares")),
                                          mainPanel(plotlyOutput("speakerplot"))
                            )
+                  ),
+                  tabPanel("About", 
+                           h3("Background"),
+                           a(img(src='OPTED_logo_transparent.png', style = "float:right; width: 150px; size: contain;", alt = "OPTED initiative"), href="https://opted.eu"),
+                           p(HTML("<p>This proto-type application has been developed in the context of the <a href=\"https://opted.eu\" target=\"_blank\">OPTED initiative</a>, aiming to facilitate access to systematic information from political texts.<p>
+                           It is part of <a href=\"https://opted.eu/designing-an-infrastructure/wp5-parliamentary-government-and-legal-texts\" target=\"_blank\">Work Package 5</a>, focusssing on parliamentary, government and legal texts, in particular.<p>
+                           The project has received funding from the European Union’s Horizon 2020 research & innovation programme under <a href=\"https://cordis.europa.eu/project/id/951832\" target=\"_blank\">grant agreement No 951832</a>.<p>
+                           For feedback and questions on this particular application, please contact to <a href=\"http://christian-rauh.eu\" target=\"_blank\">Christian Rauh</a>. <br> ")),
+                           p(HTML("<br>")),
+                           h3("How to cite"),
+                           p(HTML("When using any of the material generated here in your own work, please refer to this application and cite the underlying data sources.<br>
+                           At the moment, all parliamentary text data are drawn from <a href=\"https://doi.org/10.7910/DVN/L4OAKN\" target=\"_blank\">Rauh and Schwalbach 2020</a>.")),
+                           p(HTML("<br>")),
+                           
+                           h3("Project partners"),
+                           p(HTML("<br>")),
+                           tags$table(style = "border-collapse: separate; border-spacing: 50px 0; padding: 10px 0;",
+                                      tags$tr(tags$th(a(img(src='WZB_Komb_portrait_Web_engl.png', style = "float:center; height: 100px; size: contain;", alt = "WZB"), href = "https://www.wzb.eu/en/persons/christian-rauh")),
+                                              tags$th(a(img(src='pti_logo.png', style = "float:center; height: 100px; size: contain;", alt = "TKPTI"), href = "https://politikatudomany.tk.hu/en/researcher/sebok-miklos")),
+                                              tags$th(a(img(src='CCCP_Logo.png', style = "float:center; height: 100px; size: contain;", alt = "CCCP"), href = "https://cccp.uni-koeln.de/en/team/core-faculty/prof-dr-sven-oliver-proksch"))),
+                                      tags$tr(tags$td(HTML("<br>")),
+                                              tags$td(HTML("<br>")),
+                                              tags$td(HTML("<br>"))),
+                                      tags$tr(tags$td("Christian Rauh"),
+                                              tags$td(HTML("Miklós Sebők<br>Anna Székely<br>Péter Visnovitz")),
+                                              tags$td(HTML("Sven-Oliver Proksch<br>Jan Schwalbach<br>Alexander Dalheimer"))))
+                           # p(a(img(src='WZB_Komb_portrait_Web_engl.png', style = "float:left; height: 100px; size: contain;", alt = "OPTED initiative"), href="https://opted.eu"),
+                           #   a(img(src='pti_logo.png', style = "float:center; height: 100px; size: contain;", alt = "OPTED initiative"), href="https://opted.eu"),
+                           #   a(img(src='CCCP_Logo.png', style = "float:rigth; height: 100px; size: contain;", alt = "OPTED initiative"), href="https://opted.eu"))
+                           
                   )
                 ) # navbarPage
 ) # fluidPage
