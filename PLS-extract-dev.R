@@ -9,6 +9,7 @@ library(tidyverse) # 1.3.0
 library(quanteda) # 3.2.0
 library(plotly) # 4.10.0
 library(gmodels)
+library(feather)
 
 
 # Example data from ParlSpeech V2 ####

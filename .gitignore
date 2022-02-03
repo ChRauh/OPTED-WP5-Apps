@@ -40,3 +40,7 @@ vignettes/*.pdf
 
 # Large data files
 PLS-words/Data/**
+
+# Folders with secret keys
+PLS-words/rsconnect/
+PLS-extract/rsconnect/
