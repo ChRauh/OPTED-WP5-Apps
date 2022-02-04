@@ -1,28 +1,26 @@
 library(shiny)
-# library(shinythemes) # CSS customized instead
 
-# library(tidyverse) # 1.3.0, quicker to load only needed namespaces
 library(dplyr)
 library(magrittr)
+library(tidyr)
+library(forcats)
 library(ggplot2)
 library(stringr)
-library(readr)
+# library(readr)
 
-library(quanteda) # 3.2.0
 library(plotly) # 4.10.0
 library(gmodels)
+library(feather)
 
 # OPTED blue
 # #0063a6
 
-# <a href=\"https://doi.org/10.7910/DVN/L4OAKN\" target=\"_blank\">Rauh and Schwalbach 2020</a>
-
-
 # Object selection ####
 # Basis to let the app select the right data based on user parliament selection
 parl.select <- data.frame(parliament = c("UK-HouseOfCommons", "DE-Bundestag"),
-                          dev.path = c("./PLS-words/Data/hc_tok.rds", "./PLS-words/Data/bt_tok.rds"), # relative path from project directory
-                          app.path = c("./Data/hc_tok.rds", "./Data/bt_tok.rds")) # Relative path from app directory
+                          dev.path = c("./PLS-words/Data/hc_corp.feather", "./PLS-words/Data/bt_corp.feather"), # relative path from project directory
+                          app.path = c("./Data/hc_corp.feather", "./Data/bt_corp.feather"), # Relative path from app directory
+                          nspeeches = c(200000, 20000)) 
 
 
 
@@ -57,9 +55,9 @@ ui <- fluidPage(
                                specific words have featured in political debates of different national parliaments in Europe.</i>")),
                              p(HTML("")),
                              p(HTML("Once you have chosen the words and the parliament of interest to you on the right-hand side,
-                               we visualize their prominence in all plenary speeches over <i>time</i>, across <i>different parties</i>, and across <i>individual speakers</i>.
-                                    <br> The menu on top of this page leads you to these results. All graphics can be customized and saved by hoovering over them. 
-                               You may also download the underlying data.")),
+                               we visualize their prominence in all plenary speeches over <i>time</i>, across <i>different parties</i>, and across <i>individual speakers</i>.")),
+                             p("The menu on top of this page leads you to these results. All graphics can be customized and saved by hoovering over them. 
+                               You may also download the underlying data."),
                              p(HTML("Before <i>using this material in your work</i>, please consult the 'About' page above.")),
                              p(HTML("This proto-type application has been developed in <a href=\"https://opted.eu/designing-an-infrastructure/wp5-parliamentary-government-and-legal-texts\" target=\"_blank\">Work Package 5</a> 
                                     of the <a href=\"https://opted.eu\" target=\"_blank\">OPTED initiative</a>. 
@@ -79,7 +77,7 @@ ui <- fluidPage(
                                         helpText("This plot illustrates the prominence of your keywords in the respective parliament over time."),
                                         helpText("It shows the monthly share of speeches in which at least one of the key words was used."),
                                         helpText("Hoover over the plot to select your preferred time series, to zoom in or out, and to save the resulting picture."),
-                                        helpText("You can also download the underlying monthly time series, but note the usage and citation requirements on the main page."),
+                                        helpText("You can also download the underlying monthly time series, but note the usage and citation requirements on the 'about' page."),
                                         downloadButton("downloadTime", "Download time series")),
                            mainPanel(plotlyOutput("timeplot"))
              )
@@ -90,7 +88,7 @@ ui <- fluidPage(
                                         helpText("This plot illustrates the prominence of your keywords across the parties in the respective parliament."),
                                         helpText("It shows the share of partisan speeches in which at least one of the key words was used (including the 95% confidence interval around this average value)."),
                                         helpText("Hoover over the plot to customize it or to save the resulting picture."),
-                                        helpText("You can also download the party shares below, but note the usage and citation requirements on the main page."),
+                                        helpText("You can also download the party shares below, but note the usage and citation requirements on the 'about' page."),
                                         downloadButton("downloadParty", "Download party shares")),
                            mainPanel(plotlyOutput("partyplot"))
              )
@@ -98,10 +96,10 @@ ui <- fluidPage(
     tabPanel("Speakers",
              sidebarLayout(position = "left",
                            sidebarPanel(width = 3, # Out of 12
-                                        helpText("This plot illustrates the prominence of your keywords across the individual in the respective parliament."),
+                                        helpText("This plot illustrates the prominence of your keywords across the individuals in the respective parliament."),
                                         helpText("It shows the share of of keywords of all words a speaker has uttered in parliament (speaking time varies a lot!), listing only the top 25 speakers along that measure."),
                                         helpText("Hoover over the plot to customize it or to save the resulting picture."),
-                                        helpText("You can also download the values for all speakers below, but note the usage and citation requirements on the main page."),
+                                        helpText("You can also download the values for all speakers below, but note the usage and citation requirements on the 'about' page."),
                                         downloadButton("downloadSpeaker", "Download speaker shares")),
                            mainPanel(plotlyOutput("speakerplot"))
              )
@@ -151,6 +149,9 @@ server <- function(input, output) {
   
   # Update user word(s) choice upon submit button
   user.words <- eventReactive(input$submit, {
+    
+    showModal(modalDialog(title = "Just a few seconds...", "Collecting speeches and searching for your key words.", footer=NULL))
+    
     input$words %>%
       str_split(",") %>%
       unlist() %>%
@@ -158,50 +159,47 @@ server <- function(input, output) {
   })
   
   # Quanteda dictionary of key words
-  user.dict <- eventReactive(input$submit, {
-    list(hits = user.words()) %>% 
-      dictionary()
+  # user.dict <- eventReactive(input$submit, {
+  #   list(hits = user.words()) %>% 
+  #     dictionary()
+  # })
+  
+  # Key words to RegEx
+  user.regex <- eventReactive(input$submit, {
+    paste0(" (", user.words(), ")") %>%
+      paste(collapse = "|") %>%
+      str_replace_all(fixed("*"), "([a-z])*")
   })
   
   # Load tokens object of selected parliament, and select key words
   # The time killer
   out.tok <- eventReactive(input$submit, {
     
-    showModal(modalDialog("Collecting data and searching your key words! Just a few seconds ...", footer=NULL))
-    
-    toks <- read_rds(parl.select$app.path[parl.select$parliament == user.parliament()]) %>%
-      # tokens_subset(date >= user.mindate &
-      #               date <= user.maxdate) %>%
-      tokens_lookup(user.dict(),
-                    case_insensitive = TRUE,  # Not case sensitive
-                    exclusive = TRUE,         # Keep only tokens matching user word selection
-                    valuetype = "glob")       # Allow for * wild cards
-    
-    removeModal()
-    
+    toks <- read_feather(parl.select$app.path[parl.select$parliament == user.parliament()])
+    # Time subset here
+
     return(toks)
   })
   
-  # Get data frame
+  
+  # Get data frame of key word counts and presence
   out.data <- eventReactive(input$submit, {
     
-    showModal(modalDialog("Count your key words! Almost there ...", footer=NULL))
-    
-    df <- 
+   df <- 
       out.tok() %>% 
-      dfm() %>% # Equals freq of 'hits' key from above lookup
-      convert(to = "data.frame") %>% 
-      cbind(docvars(out.tok()))  %>% # row order should be consistent
-      select(-c(id, doc_id)) %>% 
-      mutate(user.words.pres = as.numeric(hits > 0)) # are user words present in speech?
-    
-    removeModal()
+      mutate(hits = str_count(text, user.regex()),
+             user.words.pres = as.numeric(hits > 0))
     
     return(df)
   })
   
   # Time series data
   time.data <- reactive({
+    
+    if(input$submit == 0) {return(NULL)}
+    
+    showModal(modalDialog(title = "Just a few seconds.", "Aggregating usage of your key words over time ...", footer=NULL))
+    
     out.data() %>% 
       group_by(month) %>% 
       summarise(share = mean(user.words.pres) *100) %>% 
@@ -240,6 +238,8 @@ server <- function(input, output) {
                                         paste("Parliament: ", user.parliament(), ". Keywords: ", paste(user.words(), collapse = ", "), sep = ""),'</sup>')),
              legend = list(orientation = "h", x = 0.3, y = -0.2))
     
+    removeModal()
+    
     return(time.pl)
   })
   
@@ -256,6 +256,11 @@ server <- function(input, output) {
   
   # Party data
   party.data <- reactive({
+    
+    if(input$submit == 0) {return(NULL)}
+    
+    showModal(modalDialog(title = "Just a few seconds.", "Aggregating usage of your key words across parties ...", footer=NULL))
+    
     df <- 
       out.data() %>% 
       group_by(party) %>% 
@@ -293,6 +298,8 @@ server <- function(input, output) {
                                         '<sup>',
                                         paste("Parliament: ", user.parliament(), ". Keywords: ", paste(user.words(), collapse = ", "), sep = ""),'</sup>')))
     
+    removeModal()
+    
     return(party.pl)
   })
   
@@ -309,6 +316,11 @@ server <- function(input, output) {
   
   # Speaker data 
   speaker.data <- reactive({
+    
+    if(input$submit == 0) {return(NULL)}
+    
+    showModal(modalDialog(title = "Just a few seconds.", "Aggregating usage of your key words across speakers ...", footer=NULL))
+    
     sdf <-
       out.data() %>% 
       filter(party != "independent" ) %>% 
@@ -341,11 +353,15 @@ server <- function(input, output) {
       theme(legend.position = "none",
             axis.text = element_text(color = "black"))
     
-    ggplotly(speaker.gg, tooltip = c("y", "x")) %>%
+    speaker.pl <- ggplotly(speaker.gg, tooltip = c("y", "x")) %>%
       layout(title = list(text = paste0('Keyword usage by individual speakers (Top 25, in relative terms)',
                                         '<br>',
                                         '<sup>',
                                         paste("Parliament: ", user.parliament(), ". Keywords: ", paste(user.words(), collapse = ", "), sep = ""),'</sup>')))
+    
+    removeModal()
+    
+    return(speaker.pl)
     
   })
   
@@ -355,17 +371,37 @@ server <- function(input, output) {
       paste('MyWordsInParliament-Speakers-', Sys.Date(), '.csv', sep='')
     },
     content = function(con) {
-      write.csv(party.data(), con, row.names = F)
+      write.csv(speaker.data(), con, row.names = F)
     }
   )
   
+  # counter <- 0
   
   # Summary output for start page
   output$summary <- renderText({
-    paste0("Parliament:\t\t", user.parliament(), "\n",
-           "Keywords:\t\t", paste(user.words(), collapse = ", "), "\n",
-           "Total n of speeches:\t", nrow(out.data()), "\n",
-           "Speeches with keywords:\t", sum(out.data()$user.words.pres), " (", round(sum(out.data()$user.words.pres)/nrow(out.data())*100, 2), "%)", "\n")
+    
+    if(input$submit == 0) {return("Nothing submitted yet!")}
+    
+    # counter <<- counter + 1
+    
+    # parliament <- user.parliament()
+    # wordlist <- paste(user.words(), collapse = ", ")
+    # nspeeches <- parl.select$nspeeches[parl.select$parliament == parliament]
+    # hits <- sum(out.data()$user.words.pres)
+    # hitspct <- round((hits/nspeeches)*100, 2)
+    
+    # summary <- paste0("Parliament:\t\t", parliament, "\n",
+    #        "Keywords:\t\t", wordlist, "\n",
+    #        "Total n of speeches:\t", nspeeches, "\n",
+    #        "Speeches with keywords:\t", hits , " (", hitspct, "%)", "\n")
+    
+    summary <- paste0("Parliament:\t\t", user.parliament(), "\n",
+                      "Keywords:\t\t", paste(user.words(), collapse = ", "), "\n")
+    
+    removeModal() # End waiting dialogue here 
+    
+    return(summary)
+    
   })
   
   

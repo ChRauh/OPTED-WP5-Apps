@@ -242,3 +242,28 @@ ggplotly(speaker.gg, tooltip = c("y", "x")) %>%
                                     '<sup>',
                                     paste("Parliament: ", user.parliament, ". Keywords: ", paste(user.words, collapse = ", "), sep = ""),'</sup>')))
 
+
+
+
+# Data for str_count version of the app
+
+read_rds("D:/Dropbox/ParlSpeechV2/Corpora/V2-Corpora/Corp_Bundestag_V2.rds") %>%
+  filter(!chair) %>% # Drop speeches from the chair
+  mutate(id = row_number(),                              # ID to enable restoring of order later
+         month = str_remove(date, "-[0-9]{2}$"),        # Month of speech, for aggregation
+         text = tolower(text),                        # for str detection !
+         text = paste0(" ", text, " "),               # full text must start and end with space for correct str detection
+         text = str_remove_all(text, "[:punct:]")) %>%  # as in tokenization !
+  select(c(id, month, party, speaker, terms, text)) %>% # Same as docvars for the other objects
+  write_feather("./PLS-words/Data/bt_corp.feather")
+
+read_rds("D:/Dropbox/ParlSpeechV2/Corpora/V2-Corpora/Corp_HouseOfCommons_V2.rds") %>%
+  filter(!chair) %>% # Drop speeches from the chair
+  mutate(id = row_number(),                              # ID to enable restoring of order later
+         month = str_remove(date, "-[0-9]{2}$"),        # Month of speech, for aggregation
+         text = tolower(text),                        # for str detection !
+         text = paste0(" ", text, " "),               # full text must start and end with space for correct str detection
+         text = str_remove_all(text, "[:punct:]")) %>%  # as in tokenization !
+  select(c(id, month, party, speaker, terms, text)) %>% # Same as docvars for the other objects
+  write_feather("./PLS-words/Data/hc_corp.feather")
+
