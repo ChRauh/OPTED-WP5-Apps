@@ -58,8 +58,11 @@ for (i in 1:nrow(hc)) {
 table(hc$law)
 
 # Export data to app folder ####
-write_rds(bt, "./PLS-extract/Data/bt-mock.rds")
-write_rds(hc, "./PLS-extract/Data/hc-mock.rds")
+# write_rds(bt, "./PLS-extract/Data/bt-mock.rds")
+# write_rds(hc, "./PLS-extract/Data/hc-mock.rds")
+
+write_feather(bt, "./PLS-extract/Data/bt-mock.feather")
+write_feather(hc, "./PLS-extract/Data/hc-mock.feather")
 
 
 # Autocompletion lists ####

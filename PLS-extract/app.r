@@ -1,22 +1,16 @@
 library(shiny)
-library(shinythemes)
 
-library(tidyverse) # 1.3.0
-library(quanteda) # 3.2.0
-library(plotly) # 4.10.0
-library(gmodels)
+library(dplyr)
+library(magrittr)
+library(tidyr)
+library(forcats)
+library(stringr)
+library(readr)
+
+library(feather)
 
 # OPTED blue
 # #0063a6
-
-# <a href=\"https://doi.org/10.7910/DVN/L4OAKN\" target=\"_blank\">Rauh and Schwalbach 2020</a>
-
-
-# Data selection ####
-# Basis to let the app select the right data based on user parliament selection
-parl.select <- data.frame(parliament = c("UK-HouseOfCommons", "DE-Bundestag"),
-                          dev.path = c("./PLS-words/Data/hc_tok.rds", "./PLS-words/Data/bt_tok.rds"), # relative path from project directory
-                          app.path = c("./Data/hc_mock.rds", "./Data/bt_mock.rds")) # Relative path from app directory
 
 # Autocomplete lists ####
 ac_parties <- read_rds("./Data/ac-parties.rds")
@@ -41,16 +35,19 @@ ui <- fluidPage(
                                          choices = list("DE: Bundestag" = "DE-Bundestag", 
                                                         "UK: House Of Commons" = "UK-HouseOfCommons"), 
                                          selected = 1),
+                             
                              helpText("Choose one of the parliamentary chambers we currently feature here (required). The filters below can be left blank. 
                                       In this case the maximum range of values in the raw data is returned."),
                              
                              dateRangeInput(
                                inputId = "dates", 
-                               label = h5("Date range")),
-                             
+                               label = h5("Date range (YYYY-MM-DD)"),
+                               start = NA,
+                               end = NA),
+
                              selectizeInput(
                                inputId = 'laws',
-                               label = h5('Debated Laws'),
+                               label = h5('Debated Law'),
                                choices = ac_laws,
                                selected = NULL,
                                multiple = TRUE, # allow for multiple inputs
@@ -85,7 +82,7 @@ ui <- fluidPage(
                              p(HTML("<i style = \"color: #0063a6\">Quickly extract full-text speech data sets
                                from the political debates of different national parliaments in Europe.</i>")),
                              p(HTML("")),
-                             p(HTML("Once you have set and submitted the parliament of inteerst to you (and the optional filters) on the right-hand side, we summarise your selection below and offer different download options.")),
+                             p(HTML("Once you have set and submitted the parliament of interest to you (with optional filters) in the grey box, we summarise your selection below and offer different download options.")),
                              p(HTML("<strong>NOTE:</strong> Currently the app runs on sampled mock data drawn from <a href=\"https://doi.org/10.7910/DVN/L4OAKN\" target=\"_blank\">Rauh and Schwalbach 2020</a> only.")),
                              p(HTML("Before <i>using this material in your work</i>, please consult the 'About' page above.")),
                              p(HTML("This proto-type application has been developed in <a href=\"https://opted.eu/designing-an-infrastructure/wp5-parliamentary-government-and-legal-texts\" target=\"_blank\">Work Package 5</a> 
@@ -145,232 +142,135 @@ ui <- fluidPage(
 
 
 
-# Define server logic to plot various variables against mpg ----
+# Define server logic 
 server <- function(input, output) {
+  
+  
+  # Data selection ####
+  # Basis to let the app select the right data based on user parliament selection
+  parl.select <- data.frame(parliament = c("UK-HouseOfCommons", "DE-Bundestag"),
+                            app.path = c("./Data/hc-mock.feather", "./Data/bt-mock.feather"), # Relative path from app directory
+                            nspeeches = c(10000, 10000)) 
   
   # Update user parliament choice upon submit button
   user.parliament <- eventReactive(input$submit, {
     input$parl
   })
-
-  # Update user word(s) choice upon submit button
-  user.words <- eventReactive(input$submit, {
-      input$words %>%
-      str_split(",") %>%
-      unlist() %>%
-      str_trim(side = "both")
+  
+  # Update user party choice upon submit button
+  user.dates <- eventReactive(input$submit, {
+    input$dates
   })
   
-  # Quanteda dictionary of key words
-  user.dict <- eventReactive(input$submit, {
-    list(hits = user.words()) %>% 
-    dictionary()
-    })
+  # Update user party choice upon submit button
+  user.laws <- eventReactive(input$submit, {
+    input$laws
+  })
   
-  # Load tokens object of selected parliament, and select key words
-  # The time killer
-  out.tok <- eventReactive(input$submit, {
-    
-    showModal(modalDialog("Collecting data and searching your key words! Just a few seconds ...", footer=NULL))
-    
-    toks <- read_rds(parl.select$app.path[parl.select$parliament == user.parliament()]) %>%
-    # tokens_subset(date >= user.mindate &
-    #               date <= user.maxdate) %>%
-    tokens_lookup(user.dict(),
-                  case_insensitive = TRUE,  # Not case sensitive
-                  exclusive = TRUE,         # Keep only tokens matching user word selection
-                  valuetype = "glob")       # Allow for * wild cards
-    
-    removeModal()
-    
-    return(toks)
-    })
-   
-  # Get data frame
+  # Update user party choice upon submit button
+  user.party <- eventReactive(input$submit, {
+    input$party
+  })
+  
+  # Update user speaker choice upon submit button
+  user.speaker <- eventReactive(input$submit, {
+    input$speaker
+  })
+
+  # Load data  of selected parliament,
+  # and apply optional filters
   out.data <- eventReactive(input$submit, {
+
+    showModal(modalDialog(title = "Just a few seconds ...", "Loading and filtering data", footer=NULL))
+
+    df <- read_feather(parl.select$app.path[parl.select$parliament == user.parliament()])
     
-    showModal(modalDialog("Count your key words! Almost there ...", footer=NULL))
+    # Date filter, if present
+    if (!is.na(user.dates()[1])) { 
+      df <- df %>% 
+        filter(date >= user.dates()[1]) %>% 
+        filter(date <= user.dates()[2])
+    }
     
-    df <- 
-      out.tok() %>% 
-      dfm() %>% # Equals freq of 'hits' key from above lookup
-      convert(to = "data.frame") %>% 
-      cbind(docvars(out.tok()))  %>% # row order should be consistent
-      select(-c(id, doc_id)) %>% 
-      mutate(user.words.pres = as.numeric(hits > 0)) # are user words present in speech?
+    # Party filter, if present
+    if (!is.null(user.party())) { 
+      df <- df %>% 
+        filter(party %in% user.party())
+    }
     
-    removeModal()
+    # Speaker filter, if present
+    if (!is.null(user.speaker())) { 
+      df <- df %>% 
+        filter(speaker %in% user.speaker())
+    }
     
+    # Law filter, if present
+    if (!is.null(user.laws())) { 
+      df <- df %>% 
+        filter(law %in% user.laws())
+    }
+    
+    # Return resulting data
     return(df)
-  })
-  
-  # Time series data
-  time.data <- reactive({
-    out.data() %>% 
-    group_by(month) %>% 
-    summarise(share = mean(user.words.pres) *100) %>% 
-    mutate(share.ma = stats::filter(share, rep(1,5), sides = 2)/5) %>% 
-    pivot_longer(2:3) %>% 
-    mutate(series = ifelse(name == "share", "Monthly", "Moving average (5 months)")) %>% 
-    select(-name) %>% 
-    arrange(month, series)
+
     })
   
-  # Time series plot
-  output$timeplot <- renderPlotly({
-    
-    time.breaks <- unique(time.data()$month)
-    time.breaks <- time.breaks[which(str_detect(time.breaks, "-01"))] # Only January 
-    time.labels <- time.breaks %>% str_remove_all("-.*?$")
-    
-    
-    time.gg <- ggplot(time.data(), aes(y = value, x = month, color = series, size = series, group = series))+
-      geom_line()+
-      scale_x_discrete(breaks = time.breaks, labels = time.labels)+
-      scale_color_manual(values = c("grey60", "#0063a6"), name = "Time series: ")+
-      scale_size_manual(values = c(.5, 1.2), name = "Time series: ")+
-      labs(title = "Keywords over time",
-           subtitle = paste("Parliament: ", user.parliament(), ". Keywords: ", paste(user.words(), collapse = ", "), sep = ""),
-           x = "Month",
-           y = "Share of parliamentary speeches\nwith at least one keyword (%)\n")+
-      theme_bw()+
-      theme(legend.position = "bottom",
-            axis.text.x = element_text(angle = 90, vjust = .5, hjust = -1))
-    
-    time.pl <- ggplotly(time.gg, tooltip = c("y", "x")) %>%
-      layout(title = list(text = paste0('Keywords over time',
-                                        '<br>',
-                                        '<sup>',
-                                        paste("Parliament: ", user.parliament(), ". Keywords: ", paste(user.words(), collapse = ", "), sep = ""),'</sup>')),
-             legend = list(orientation = "h", x = 0.3, y = -0.2))
-    
-    return(time.pl)
-  })
-  
-  # Time series download
-  output$downloadTime <- downloadHandler(
-      filename = function() {
-        paste('MyWordsInParliament-TimeSeries', Sys.Date(), '.csv', sep='')
-      },
-      content = function(con) {
-        write.csv(time.data(), con, row.names = F)
-      }
-    )
-  
-  
-  # Party data
-  party.data <- reactive({
-    df <- 
-      out.data() %>% 
-      group_by(party) %>% 
-      summarise(share = gmodels::ci(user.words.pres)[1],
-              lo = gmodels::ci(user.words.pres)[2],
-              hi = gmodels::ci(user.words.pres)[3]) %>% 
-      mutate(across(2:4, function(x){x*100})) %>% # Percentages
-      filter(party != "independent" ) %>% 
-      filter(!is.na(party)) %>% 
-      arrange(share) %>% 
-      mutate(party = factor(party)) # implicitly ordered by mean
-  
-  df$party <- fct_reorder(df$party, df$share, mean)
-  
-  return(df)
-  })
-  
-  # Party plot
-  output$partyplot <- renderPlotly({
-    parties.gg <- ggplot(party.data(), aes(y = party))+
-      geom_vline(xintercept = mean(party.data()$share), linetype = "dashed")+
-      geom_linerange(aes(xmin = lo, xmax = hi), color = "#0063a6")+
-      geom_point(aes(x=share), color = "#0063a6")+
-      labs(title = "Keywords by party of speaker",
-           subtitle = paste("Parliament: ", user.parliament(), ". Keywords: ", paste(user.words(), collapse = ", "), sep = ""),
-           x = "Share of parliamentary speeches\nwith at least one keyword (%)\n",
-           y = "")+
-      theme_bw()+
-      theme(legend.position = "none",
-            axis.text = element_text(color = "black"))
-
-    party.pl <- ggplotly(parties.gg, tooltip = c("y", "x")) %>%
-      layout(title = list(text = paste0('Keywords by party of speaker',
-                                        '<br>',
-                                        '<sup>',
-                                        paste("Parliament: ", user.parliament(), ". Keywords: ", paste(user.words(), collapse = ", "), sep = ""),'</sup>')))
-
-    return(party.pl)
-  })
-  
-  # Party download
-  output$downloadParty <- downloadHandler(
+  # RDS download
+  output$downloadRDS <- downloadHandler(
     filename = function() {
-      paste('MyWordsInParliament-PartyShares', Sys.Date(), '.csv', sep='')
+      paste0('ParlLawSpeech-Extraction', Sys.Date(), '.rds')
     },
     content = function(con) {
-      write.csv(party.data(), con, row.names = F)
+      write_rds(out.data(), con)
     }
   )
   
-  
-  # Speaker data 
-  speaker.data <- reactive({
-    sdf <-
-      out.data() %>% 
-      filter(party != "independent" ) %>% 
-      filter(!is.na(party)) %>% 
-      mutate(speaker = paste0(speaker, " (",party, ")")) %>% 
-      select(-party) %>% 
-      group_by(speaker) %>% 
-      summarise(mentions = sum(hits),  
-                totalwords = sum(terms)) %>% 
-      mutate(share = (mentions/totalwords)*100) %>% 
-      arrange(desc(share))
-    
-    sdf$speaker <- fct_reorder(sdf$speaker, sdf$share, mean)
-    
-    return(sdf)
-    
-  })
-  
-  # Speaker plot
-  output$speakerplot <- renderPlotly({
-    speaker.gg <- ggplot(head(speaker.data(), 25), aes(y = speaker, x = share))+
-      geom_col(fill = "#0063a6", width = .7)+
-      geom_vline(xintercept = mean(speaker.data()$share), linetype = "solid", color = "red")+
-      scale_x_continuous(expand = expansion(mult = c(0, 0.1)))+
-      labs(title = "Keyword usage by individual speakers (Top 25, in relative terms)",
-           subtitle = paste("Parliament: ", user.parliament(), ". Keywords: ", paste(user.words(), collapse = ", "), sep = ""),
-           x = "Share of keywords\namong all words spoken in parliament (%)\n",
-           y = "")+
-      theme_bw()+
-      theme(legend.position = "none",
-            axis.text = element_text(color = "black"))
-    
-    ggplotly(speaker.gg, tooltip = c("y", "x")) %>%
-      layout(title = list(text = paste0('Keyword usage by individual speakers (Top 25, in relative terms)',
-                                        '<br>',
-                                        '<sup>',
-                                        paste("Parliament: ", user.parliament(), ". Keywords: ", paste(user.words(), collapse = ", "), sep = ""),'</sup>')))
-    
-  })
-  
-  # Speaker download
-  output$downloadSpeaker <- downloadHandler(
+  # FEATHER download
+  output$downloadFEATHER <- downloadHandler(
     filename = function() {
-      paste('MyWordsInParliament-Speakers-', Sys.Date(), '.csv', sep='')
+      paste0('ParlLawSpeech-Extraction', Sys.Date(), '.feather')
     },
     content = function(con) {
-      write.csv(party.data(), con, row.names = F)
+      write_feather(out.data(), con)
     }
   )
   
+  # TSV download
+  output$downloadTSV <- downloadHandler(
+    filename = function() {
+      paste0('ParlLawSpeech-Extraction', Sys.Date(), '.tsv')
+    },
+    content = function(con) {
+      write_tsv(out.data(), con)
+    }
+  )
+  
+   
 
   # Summary output for start page
   output$summary <- renderText({
-    paste0("Parliament:\t\t", user.parliament(), "\n",
-          "Keywords:\t\t", paste(user.words(), collapse = ", "), "\n",
-          "Total n of speeches:\t", nrow(out.data()), "\n",
-          "Speeches with keywords:\t", sum(out.data()$user.words.pres), " (", round(sum(out.data()$user.words.pres)/nrow(out.data())*100, 2), "%)", "\n")
-    })
+    
+    if(input$submit == 0) {return("Nothing submitted yet!")}
+    
+    date.range <- ifelse(is.na(user.dates()[1]) & is.na(user.dates()[2]), " ",  paste(user.dates(),collapse = " to "))
+    
+
+    summary <- paste0("Parliament:\t\t", user.parliament(), "\n",
+                      "Raw data:\t\t", parl.select$app.path[parl.select$parliament == user.parliament()], "\n",
+                      "Speeches in raw data:\t",  parl.select$nspeeches[parl.select$parliament == user.parliament()], "\n",
+                      "\n",
+                      "Date range:\t\t", date.range, "\n",
+                      "Parties:\t\t", paste(user.party(), collapse = ", "), "\n",
+                      "Laws:\t\t\t", paste(user.laws(), collapse = ", "), "\n",
+                      "Speakers:\t\t", paste(user.speaker(), collapse = ", "), "\n",
+                      "\n",
+                      "Selected speeches:\t", nrow(out.data()))
+    
+    removeModal() # End waiting dialogue here 
+    
+    return(summary)
+    
+  })
 
   
 }
