@@ -15,14 +15,6 @@ library(feather)
 # OPTED blue
 # #0063a6
 
-# Object selection ####
-# Basis to let the app select the right data based on user parliament selection
-parl.select <- data.frame(parliament = c("UK-HouseOfCommons", "DE-Bundestag"),
-                          dev.path = c("./PLS-words/Data/hc_corp.feather", "./PLS-words/Data/bt_corp.feather"), # relative path from project directory
-                          app.path = c("./Data/hc_corp.feather", "./Data/bt_corp.feather"), # Relative path from app directory
-                          nspeeches = c(200000, 20000)) 
-
-
 
 # Define UI
 ui <- fluidPage(
@@ -43,8 +35,8 @@ ui <- fluidPage(
                                          selected = 1),
                              helpText("Choose one of the parliamentary chambers we currently feature."),
                              textInput("words", label = h4("Words"), "migration*, flucht*"),
-                             helpText("The word(s) you want to track in parliamentary speeches. Combine multiple words in a comma-separated list. Use the * wildcard to match one or several characters."),
-                             helpText("Once you submit your choices, we collect and analyze the data for you. Given the size of the text corpora, this may take a couple of seconds."),
+                             helpText("The words or expressions you want to track in parliamentary speeches. Combine multiple words/expressions in a comma-separated list. The * wildcard matches zero or several characters."),
+                             helpText("Once you submit your choices, we collect the data for you. Given the size of the text corpora, calling the results may take a couple of seconds."),
                              actionButton("submit", label = "Submit!", style = "color: #0063a6;")
                              # submitButton(text = "Submit!")
                              
@@ -76,8 +68,8 @@ ui <- fluidPage(
                            sidebarPanel(width = 3, # Out of 12
                                         helpText("This plot illustrates the prominence of your keywords in the respective parliament over time."),
                                         helpText("It shows the monthly share of speeches in which at least one of the key words was used."),
-                                        helpText("Hoover over the plot to select your preferred time series, to zoom in or out, and to save the resulting picture."),
-                                        helpText("You can also download the underlying monthly time series, but note the usage and citation requirements on the 'about' page."),
+                                        helpText("Hoover over the plot to show and hide time series, to adapt the scales, or to save the result."),
+                                        helpText("You can also download the monthly time series, but note the usage and citation requirements on the 'about' page."),
                                         downloadButton("downloadTime", "Download time series")),
                            mainPanel(plotlyOutput("timeplot"))
              )
@@ -88,7 +80,7 @@ ui <- fluidPage(
                                         helpText("This plot illustrates the prominence of your keywords across the parties in the respective parliament."),
                                         helpText("It shows the share of partisan speeches in which at least one of the key words was used (including the 95% confidence interval around this average value)."),
                                         helpText("Hoover over the plot to customize it or to save the resulting picture."),
-                                        helpText("You can also download the party shares below, but note the usage and citation requirements on the 'about' page."),
+                                        helpText("You can also download the party shares, but note the usage and citation requirements on the 'about' page."),
                                         downloadButton("downloadParty", "Download party shares")),
                            mainPanel(plotlyOutput("partyplot"))
              )
@@ -99,7 +91,7 @@ ui <- fluidPage(
                                         helpText("This plot illustrates the prominence of your keywords across the individuals in the respective parliament."),
                                         helpText("It shows the share of of keywords of all words a speaker has uttered in parliament (speaking time varies a lot!), listing only the top 25 speakers along that measure."),
                                         helpText("Hoover over the plot to customize it or to save the resulting picture."),
-                                        helpText("You can also download the values for all speakers below, but note the usage and citation requirements on the 'about' page."),
+                                        helpText("You can also download the values for all speakers, but note the usage and citation requirements on the 'about' page."),
                                         downloadButton("downloadSpeaker", "Download speaker shares")),
                            mainPanel(plotlyOutput("speakerplot"))
              )
@@ -142,15 +134,25 @@ ui <- fluidPage(
 # Define server logic to plot various variables against mpg ----
 server <- function(input, output) {
   
+  # Object selection ####
+  # Basis to let the app select the right data based on user parliament selection
+  parl.select <- data.frame(parliament = c("UK-HouseOfCommons", "DE-Bundestag"),
+                            dev.path = c("./PLS-words/Data/hc_corp.feather", "./PLS-words/Data/bt_corp.feather"), # relative path from project directory
+                            app.path = c("./Data/hc_corp.feather", "./Data/bt_corp.feather"), # Relative path from app directory
+                            nspeeches = c(1856597, 212460)) 
+  
+  
   # Update user parliament choice upon submit button
   user.parliament <- eventReactive(input$submit, {
     input$parl
   })
+
+
   
   # Update user word(s) choice upon submit button
   user.words <- eventReactive(input$submit, {
     
-    showModal(modalDialog(title = "Just a few seconds...", "Collecting speeches and searching for your key words.", footer=NULL))
+    showModal(modalDialog(title = "Just a few seconds...", "Loading speeches and searching for your key words.", footer=NULL))
     
     input$words %>%
       str_split(",") %>%
@@ -167,21 +169,26 @@ server <- function(input, output) {
   # Key words to RegEx
   user.regex <- eventReactive(input$submit, {
     paste0(" (", user.words(), ")") %>%
+      tolower() %>% 
       paste(collapse = "|") %>%
       str_replace_all(fixed("*"), "([a-z])*")
   })
   
-  # Load tokens object of selected parliament, and select key words
-  # The time killer
+
+  # Load speech data of selected parliament
+  
+  # Ideally I would want to execute this immediately on submit button, 
+  # but not to re-oad if input$parl doesn't change on next submit button
+
   out.tok <- eventReactive(input$submit, {
-    
+
     toks <- read_feather(parl.select$app.path[parl.select$parliament == user.parliament()])
     # Time subset here
 
     return(toks)
   })
   
-  
+
   # Get data frame of key word counts and presence
   out.data <- eventReactive(input$submit, {
     
@@ -215,7 +222,7 @@ server <- function(input, output) {
     
     time.breaks <- unique(time.data()$month)
     time.breaks <- time.breaks[which(str_detect(time.breaks, "-01"))] # Only January 
-    time.labels <- time.breaks %>% str_remove_all("-.*?$")
+    time.labels <- time.breaks %>% str_remove_all("-.*?$") # Label full years only
     
     
     time.gg <- ggplot(time.data(), aes(y = value, x = month, color = series, size = series, group = series))+
@@ -396,7 +403,8 @@ server <- function(input, output) {
     #        "Speeches with keywords:\t", hits , " (", hitspct, "%)", "\n")
     
     summary <- paste0("Parliament:\t\t", user.parliament(), "\n",
-                      "Keywords:\t\t", paste(user.words(), collapse = ", "), "\n")
+                      "Keywords:\t\t", paste(user.words(), collapse = ", "), "\n",
+                      "Speeches searched:\t", parl.select$nspeeches[parl.select$parliament == user.parliament()], "\n")
     
     removeModal() # End waiting dialogue here 
     
